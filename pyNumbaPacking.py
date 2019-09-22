@@ -163,7 +163,7 @@ def inverse(A, A_inv, n):
     ("adj_indptr", numba.int32[:]),
     ("adj_indices", numba.int32[:]),
 ])
-class Packing():
+class Packing:
     """
     Packing object
 
