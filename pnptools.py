@@ -94,7 +94,8 @@ def get_stiffness_matrix(packing, modes=-1):
         modes = (packing.num_particles - 1) * packing.num_dim
     hes = get_hessian(packing)
     fs = packing.get_force_stress_matrix().reshape(
-        packing.num_particles * packing.num_dim, packing.num_dim * (packing.num_dim + 1) // 2
+        packing.num_particles * packing.num_dim,
+        packing.num_dim * (packing.num_dim + 1) // 2
     )
     af = get_affine_matrix(packing)
     E, V = np.linalg.eigh(hes)
@@ -161,10 +162,14 @@ def draw_particles(packing, ax, buffer=0.1, kernel=None):
 def draw_neighbors(packing, ax, buffer=0.1):
     max_overlap = 0
     for i in range(packing.num_particles):
-        for j in packing.neighbors_indices[packing.neighbors_indptr[i]: packing.neighbors_indptr[i+1]]:
-            overlap = packing.radii[i] + packing.radii[j] - packing.distance(i, j)
+        for j in packing.neighbors_indices[
+                 packing.neighbors_indptr[i]: packing.neighbors_indptr[i+1]
+        ]:
+            overlap = (
+                    packing.radii[i] + packing.radii[j] -
+                    packing.distance(i, j)
+            )
             max_overlap = np.maximum(max_overlap, overlap)
-
     basis = packing.basis.reshape(2, 2)
     ax.set_aspect("equal", adjustable="box")
     plt.plot(
@@ -175,51 +180,71 @@ def draw_neighbors(packing, ax, buffer=0.1):
     pos = packing.positions.reshape(packing.num_particles, packing.num_dim)
     cross = (pos < buffer).astype(np.int32) - (pos > 1-buffer).astype(np.int32)
     for i in range(packing.num_particles):
-        for j in packing.neighbors_indices[packing.neighbors_indptr[i]: packing.neighbors_indptr[i+1]]:
+        for j in packing.neighbors_indices[
+                 packing.neighbors_indptr[i]: packing.neighbors_indptr[i+1]
+        ]:
             if i > j:
                 posi, posj = pos[[i, j], :]
-                overlap = packing.radii[i] + packing.radii[j] - packing.distance(i, j)
+                overlap = (
+                        packing.radii[i] + packing.radii[j] -
+                        packing.distance(i, j)
+                )
                 if np.max(np.abs(posj - posi)) < 0.5:
-                    plt.plot(*(pos[[i, j], :] @ basis).T, color=[overlap / max_overlap, 1 - overlap / max_overlap, 0])
+                    plt.plot(
+                        *(pos[[i, j], :] @ basis).T,
+                        color=[overlap/max_overlap, 1-overlap/max_overlap, 0]
+                    )
                 if cross[i, 0]:
                     effposi = posi + np.array([cross[i, 0], 0])
                     if np.max(np.abs(posj - effposi)) < 0.5:
                         plt.plot(
                             *(np.array([effposi, posj]) @ basis).T,
-                            color=[overlap / max_overlap, 1 - overlap / max_overlap, 0]
+                            color=[
+                                overlap/max_overlap, 1-overlap/max_overlap, 0
+                            ]
                         )
                 if cross[i, 1]:
                     effposi = posi + np.array([0, cross[i, 1]])
                     if np.max(np.abs(posj - effposi)) < 0.5:
                         plt.plot(
                             *(np.array([effposi, posj]) @ basis).T,
-                            color=[overlap / max_overlap, 1 - overlap / max_overlap, 0]
+                            color=[
+                                overlap/max_overlap, 1-overlap/max_overlap, 0
+                            ]
                         )
                 if np.prod(cross[i]):
                     effposi = posi + cross[i]
                     if np.max(np.abs(posj - effposi)) < 0.5:
                         plt.plot(
                             *(np.array([effposi, posj]) @ basis).T,
-                            color=[overlap / max_overlap, 1 - overlap / max_overlap, 0]
+                            color=[
+                                overlap/max_overlap, 1-overlap/max_overlap, 0
+                            ]
                         )
                 if cross[j, 0]:
                     effposj = posj + np.array([cross[j, 0], 0])
                     if np.max(np.abs(effposj - posi)) < 0.5:
                         plt.plot(
                             *(np.array([posi, effposj]) @ basis).T,
-                            color=[overlap / max_overlap, 1 - overlap / max_overlap, 0]
+                            color=[
+                                overlap/max_overlap, 1-overlap/max_overlap, 0
+                            ]
                         )
                 if cross[j, 1]:
                     effposj = posj + np.array([0, cross[j, 1]])
                     if np.max(np.abs(effposj - posi)) < 0.5:
                         plt.plot(
                             *(np.array([posi, effposj]) @ basis).T,
-                            color=[overlap / max_overlap, 1 - overlap / max_overlap, 0]
+                            color=[
+                                overlap/max_overlap, 1-overlap/max_overlap, 0
+                            ]
                         )
                 if np.prod(cross[j]):
                     effposj = posj + cross[j]
                     if np.max(np.abs(effposj - posi)) < 0.5:
                         plt.plot(
                             *(np.array([posi, effposj]) @ basis).T,
-                            color=[overlap / max_overlap, 1 - overlap / max_overlap, 0]
+                            color=[
+                                overlap/max_overlap, 1-overlap/max_overlap, 0
+                            ]
                         )

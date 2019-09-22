@@ -1050,6 +1050,151 @@ class Packing:
 
         return iteration
 
+    def dyn_rad_FIRE(
+        self, critical_force, critical_rad_force,
+        max_iterations, kernel, aging_rate, rad_force
+    ):
+        """
+        runs a single FIRE energy minimization
+
+        args:
+            critical_force (float64): minimization stops when the maximum
+                net force on a particle falls below this threshhold
+            critical_rad_force (float64): minimization stops when the maximum
+                net force on a radius falls below this threshhold
+            max_terations (int32): maximum iterations before minimization will
+                stop. Set to -1 for unlimited.
+        """
+        # FIRE params
+        a_start = 0.1
+        f_dec = 0.5
+        f_inc = 1.1
+        f_a = 0.99
+        dt = 0.01
+        dt_max = 0.1
+        N_min = 5
+        # neighbor params
+        cut_distance = np.max(self.radii) * 2
+        min_cut_distance = cut_distance * 0.1
+        refine_freq = 64
+        last_recalc = 0
+        last_positions = np.empty(
+            self.num_particles * self.num_dim, dtype=np.float64
+        )
+        last_positions[:] = self.positions
+
+        self.velocities *= 0
+        self.basis_velocities *= 0
+        self.rad_velocities *= 0
+        iteration = 0
+        N = 0
+        a = a_start
+        self.calc_neighbors(cut_distance)
+        self.calc_forces()
+        self.calc_rad_forces(kernel, aging_rate, rad_force)
+        while iteration != max_iterations:
+            # MD --------------------------------------------------------------
+            # single Euler MD step
+            self.positions += 0.5 * dt * self.velocities
+            self.radii += 0.5 * dt * self.rad_velocities
+            self.velocities += self.forces / self.masses
+            self.rad_velocities += self.rad_forces / self.rad_masses
+            self.positions += 0.5 * dt * self.velocities
+            self.radii += 0.5 * dt * self.rad_velocities
+            self.positions %= 1
+
+            self.calc_forces()
+            self.calc_rad_forces(kernel, aging_rate, rad_force)
+
+            # FIRE ------------------------------------------------------------
+            v_dot_f = 0
+            f_dot_f = 0
+            max_force_squared = 0
+            # use the sum of norms as the configuration norm
+            for i in range(self.num_particles):
+                v_dot_f += self.dot(
+                    self.velocities[i*self.num_dim: (i+1)*self.num_dim],
+                    self.forces[i*self.num_dim: (i+1)*self.num_dim]
+                )
+                f = self.dot(
+                    self.forces[i*self.num_dim: (i+1)*self.num_dim],
+                    self.forces[i*self.num_dim: (i+1)*self.num_dim]
+                )
+                f_dot_f += f
+                max_force_squared = np.maximum(max_force_squared, f)
+            # repeat the process for the radii
+            rad_v_dot_f = 0
+            rad_f_dot_f = 0
+            for i in range(self.num_particles):
+                rad_v_dot_f += (
+                    self.rad_velocities[i] * self.rad_forces[i]
+                )
+                rad_f_dot_f += self.rad_forces[i] ** 2
+            # Stop if the max net force is sufficiently small
+            if (
+                max_force_squared < critical_force ** 2 and
+                np.max(np.abs(self.rad_forces)) < critical_rad_force
+            ):
+                break
+            # if the total net force is zero, stop
+            if f_dot_f == 0:
+                self.velocities *= 0
+                # self.basis_velocities *= 0
+            # otherwise, bend velocity toward force
+            else:
+                self.velocities = (
+                    (1.0 - a) * self.velocities +
+                    a * v_dot_f / f_dot_f * self.forces
+                )
+                self.rad_velocities = (
+                    (1.0 - a) * self.rad_velocities +
+                    a * rad_v_dot_f / rad_f_dot_f * self.rad_forces
+                )
+            # if velocity points uphill, freeze
+            if v_dot_f < 0 or rad_v_dot_f < 0:
+                self.velocities *= 0
+                self.basis_velocities *= 0
+                self.rad_velocities *= 0
+                dt *= f_dec
+                a = a_start
+                N = iteration
+            # If enough steps have elapsed since last freeze, speed up
+            elif iteration - N > N_min:
+                dt = np.minimum(dt * f_inc, dt_max)
+                a *= f_a
+
+            # Neighbors -------------------------------------------------------
+            # determine distance traveled since last recalculation
+            max_displacement = 0
+            for i in range(self.num_particles):
+                delta = (
+                    self.positions[i*self.num_dim: (i+1)*self.num_dim] -
+                    last_positions[i*self.num_dim: (i+1)*self.num_dim]
+                )
+                delta += 0.5
+                delta %= 1
+                delta -= 0.5
+                max_displacement = np.maximum(
+                    np.sqrt(self.dot(delta, delta)),
+                    max_displacement
+                )
+            # If enough distace has been trveled to risk new neighbors, update
+            if 2 * max_displacement > cut_distance:
+                self.calc_neighbors(cut_distance)
+                last_recalc = iteration
+            # If enough steps have been taken without update, refine the cut
+            elif (
+                iteration - last_recalc > refine_freq and
+                cut_distance > min_cut_distance
+            ):
+                cut_distance = np.maximum(min_cut_distance, cut_distance*0.5)
+                self.calc_neighbors(cut_distance)
+                last_recalc = iteration
+
+            iteration += 1
+
+        return iteration
+
     def const_pressure_dyn_rad_FIRE(
         self, critical_force, critical_basis_force, critical_rad_force,
         max_iterations, pressure, kernel, aging_rate, rad_force
