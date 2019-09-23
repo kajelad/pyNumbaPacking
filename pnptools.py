@@ -38,7 +38,7 @@ def voigt_pair_indices(dim):
 
 
 
-def get_hessian(packing):
+def get_hessian(packing, stable=False):
     hes = packing.get_real_hessian()
     hes = hes.reshape(
         hes.size // packing.num_dim ** 2,
@@ -52,10 +52,16 @@ def get_hessian(packing):
         )
     )
     hes += hes.T
+    if stable:
+        stable_mask = np.repeat(packing.get_stable(), packing.num_dim)
+        hes = (
+            (hes.tocsr()[stable_mask, :][:, stable_mask])
+            .tobsr(blocksize=hes.blocksize)
+        )
     hes -= sparse.block_diag(
         [
             hes.data[hes.indptr[i]:hes.indptr[i+1]].sum(axis=0)
-            for i in range(packing.num_particles)
+            for i in range(hes.indptr.size - 1)
         ],
         format="bsr"
     )
@@ -105,7 +111,7 @@ def get_stiffness_matrix(packing, modes=-1):
     if modes == -1:
         modes = packing.num_particles * packing.num_dim
     stable = np.repeat(packing.get_stable(), packing.num_dim)
-    hes = get_hessian(packing).todense()[stable, :][:, stable]
+    hes = get_hessian(packing, stable=True).todense()
     fs = packing.get_force_stress_matrix().reshape(
         packing.num_particles * packing.num_dim,
         packing.num_dim * (packing.num_dim + 1) // 2
