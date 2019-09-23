@@ -592,7 +592,10 @@ class Packing:
                 self.neighbors_indptr[i], self.neighbors_indptr[i+1]
             ):
                 j = self.neighbors_indices[ij]
-                if i < j and self.distance(i, j) < self.radii[i] + self.radii[j]:
+                if (
+                        i < j and
+                        self.distance(i, j) < self.radii[i] + self.radii[j]
+                ):
                     self.adj_indptr[i+1] += 1
         self.adj_indices = np.empty(
             self.adj_indptr[self.num_particles], dtype=np.int32
@@ -604,9 +607,33 @@ class Packing:
                 self.neighbors_indptr[i], self.neighbors_indptr[i+1]
             ):
                 j = self.neighbors_indices[ij]
-                if i < j and self.distance(i, j) < self.radii[i] + self.radii[j]:
+                if (
+                        i < j and
+                        self.distance(i, j) < self.radii[i] + self.radii[j]
+                ):
                     self.adj_indices[self.adj_indptr[i+1]] = j
                     self.adj_indptr[i+1] += 1
+
+    def get_stable(self):
+        """
+        computes a boolean mask of stable particles.
+        TODO: make this correct using linear programming
+
+        returns:
+            stable (np.bool[:], num_particles): stable particle mask
+        """
+        stable = np.zeros(self.num_particles, dtype=np.bool_)
+        for i in range(self.num_particles):
+            num_contacts = 0
+            for j in self.neighbors_indices[
+                self.neighbors_indptr[i]: self.neighbors_indptr[i+1]
+            ]:
+                if self.distance(i, j) < self.radii[i] + self.radii[j]:
+                    num_contacts += 1
+            if num_contacts > self.num_dim:
+                stable[i] = True
+        return stable
+
 
     def calc_forces(self):
         self.forces *= 0

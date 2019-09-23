@@ -26,6 +26,18 @@ def voigt_map(dim):
     return vmap
 
 
+def voigt_pair_indices(dim):
+    indices = np.empty((dim * (dim - 1) // 2, 2), dtype=np.int32)
+    voigt = 0
+    for delta in range(1, dim):
+        for i in range(dim - delta):
+            indices[voigt, 0] = i
+            indices[voigt, 1] = i + delta
+            voigt += 1
+    return indices
+
+
+
 def get_hessian(packing):
     hes = packing.get_real_hessian()
     hes = hes.reshape(
@@ -91,12 +103,13 @@ def get_affine_matrix(packing):
 
 def get_stiffness_matrix(packing, modes=-1):
     if modes == -1:
-        modes = (packing.num_particles - 1) * packing.num_dim
-    hes = get_hessian(packing).todense()
+        modes = packing.num_particles * packing.num_dim
+    stable = np.repeat(packing.get_stable(), packing.num_dim)
+    hes = get_hessian(packing).todense()[stable, :][:, stable]
     fs = packing.get_force_stress_matrix().reshape(
         packing.num_particles * packing.num_dim,
         packing.num_dim * (packing.num_dim + 1) // 2
-    )
+    )[stable, :]
     af = get_affine_matrix(packing)
     E, V = np.linalg.eigh(hes)
     E_inv = 1 / E
@@ -105,6 +118,16 @@ def get_stiffness_matrix(packing, modes=-1):
     stiffness = af - fs.T @ V @ np.diag(E_inv) @ V.T @ fs
     vm = voigt_map(packing.num_dim)
     return stiffness[vm, :][:, vm]
+
+
+def get_orthotropic_moduli(packing, modes=-1):
+    v_ind = voigt_pair_indices(packing.num_dim)
+    stiffness = get_stiffness_matrix(packing)
+    compliance = np.linalg.inv(stiffness)
+    youngs = 1 / compliance.diagonal()[0, :packing.num_dim]
+    shear = 1 / compliance.diagonal()[0, packing.num_dim:]
+    poisson = -compliance[v_ind[:, 0], v_ind[:, 1]] / youngs[0, v_ind[:, 0]]
+    return youngs, shear, poisson
 
 
 def draw_particles(packing, ax, buffer=0.1, kernel=None):
