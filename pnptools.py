@@ -92,7 +92,7 @@ def get_affine_matrix(packing):
 def get_stiffness_matrix(packing, modes=-1):
     if modes == -1:
         modes = (packing.num_particles - 1) * packing.num_dim
-    hes = get_hessian(packing)
+    hes = get_hessian(packing).todense()
     fs = packing.get_force_stress_matrix().reshape(
         packing.num_particles * packing.num_dim,
         packing.num_dim * (packing.num_dim + 1) // 2
@@ -102,7 +102,7 @@ def get_stiffness_matrix(packing, modes=-1):
     E_inv = 1 / E
     E_inv[:packing.num_dim] = 0
     E_inv[packing.num_dim+modes:] = 0
-    stiffness = af + fs.T @ V @ np.diag(E_inv) @ V.T @ fs
+    stiffness = af - fs.T @ V @ np.diag(E_inv) @ V.T @ fs
     vm = voigt_map(packing.num_dim)
     return stiffness[vm, :][:, vm]
 

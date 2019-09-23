@@ -592,7 +592,7 @@ class Packing:
                 self.neighbors_indptr[i], self.neighbors_indptr[i+1]
             ):
                 j = self.neighbors_indices[ij]
-                if i < j:
+                if i < j and self.distance(i, j) < self.radii[i] + self.radii[j]:
                     self.adj_indptr[i+1] += 1
         self.adj_indices = np.empty(
             self.adj_indptr[self.num_particles], dtype=np.int32
@@ -604,7 +604,7 @@ class Packing:
                 self.neighbors_indptr[i], self.neighbors_indptr[i+1]
             ):
                 j = self.neighbors_indices[ij]
-                if i < j:
+                if i < j and self.distance(i, j) < self.radii[i] + self.radii[j]:
                     self.adj_indices[self.adj_indptr[i+1]] = j
                     self.adj_indptr[i+1] += 1
 
@@ -699,9 +699,9 @@ class Packing:
         )
         for i in range(self.num_particles):
             for ij in range(
-                self.neighbors_indptr[i], self.neighbors_indptr[i+1]
+                self.adj_indptr[i], self.adj_indptr[i+1]
             ):
-                j = self.neighbors_indices[ij]
+                j = self.adj_indices[ij]
                 self.calc_hessian_block(
                     i, j, hessian[ij*self.num_dim**2:(ij+1)*self.num_dim**2]
                 )
@@ -765,15 +765,16 @@ class Packing:
         """
         self.calc_adj()
         voigt = self.num_dim * (self.num_dim + 1) // 2
-        asmatrix = np.empty(voigt * (voigt + 1) // 2, dtype=np.float64)
+        asmatrix = np.zeros(voigt * (voigt + 1) // 2, dtype=np.float64)
         norm = np.empty(self.num_dim, dtype=np.float64)
         for i in range(self.num_particles):
             for j in self.adj_indices[
                     self.adj_indptr[i]:self.adj_indptr[i+1]
             ]:
+                norm[:] = 0
                 for a in range(self.num_dim):
                     for b in range(self.num_dim):
-                        norm += (
+                        norm[a] += (
                             self.basis[a*self.num_dim+b] *
                             self.displacement(i, j, b)
                         )
@@ -784,7 +785,7 @@ class Packing:
                     for b in range(a + 1):
                         for c in range(a + 1):
                             for d in range(b + 1 if a == c else c + 1):
-                                asmatrix[abcd] = (
+                                asmatrix[abcd] += (
                                     self.stiffness * dist *
                                     (self.radii[i] + self.radii[j]) *
                                     norm[a] * norm[b] * norm[c] * norm[d]
@@ -902,9 +903,9 @@ class Packing:
                 cut_distance = np.maximum(min_cut_distance, cut_distance*0.5)
                 self.calc_neighbors(cut_distance)
                 last_recalc = iteration
-            iteration += 1
             if not iteration % 10:
                 print(iteration, np.sqrt(max_force_squared))
+            iteration += 1
         return iteration
 
     def const_pressure_FIRE(
@@ -1045,7 +1046,8 @@ class Packing:
                 cut_distance = np.maximum(min_cut_distance, cut_distance*0.5)
                 self.calc_neighbors(cut_distance)
                 last_recalc = iteration
-
+            if not iteration % 10:
+                print(iteration, np.sqrt(max_force_squared))
             iteration += 1
 
         return iteration
@@ -1190,7 +1192,8 @@ class Packing:
                 cut_distance = np.maximum(min_cut_distance, cut_distance*0.5)
                 self.calc_neighbors(cut_distance)
                 last_recalc = iteration
-
+            if not iteration % 10:
+                print(iteration, np.sqrt(max_force_squared))
             iteration += 1
 
         return iteration
@@ -1357,7 +1360,8 @@ class Packing:
                 cut_distance = np.maximum(min_cut_distance, cut_distance*0.5)
                 self.calc_neighbors(cut_distance)
                 last_recalc = iteration
-
+            if not iteration % 10:
+                print(iteration, np.sqrt(max_force_squared))
             iteration += 1
 
         return iteration
