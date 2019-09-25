@@ -56,7 +56,7 @@ def get_hessian(packing, stable=False):
         stable_mask = np.repeat(packing.get_stable(), packing.num_dim)
         hes = (
             (hes.tocsr()[stable_mask, :][:, stable_mask])
-            .tobsr(blocksize=hes.blocksize)
+            .tobsr(blocksize=(packing.num_dim, packing.num_dim))
         )
     hes -= sparse.block_diag(
         [
