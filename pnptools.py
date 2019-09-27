@@ -6,7 +6,7 @@ Created on Thu Sep 19 23:52:31 2019
 """
 
 import numpy as np
-from scipy import sparse, optimize
+from scipy import sparse
 from matplotlib import pyplot as plt
 
 
@@ -35,7 +35,6 @@ def voigt_pair_indices(dim):
             indices[voigt, 1] = i + delta
             voigt += 1
     return indices
-
 
 
 def get_hessian(packing, stable=False):
